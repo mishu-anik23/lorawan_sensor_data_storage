@@ -22,7 +22,47 @@ public class MsAM100Decoder{
         }
         return data;
     }
-    public Map<String, String> decodeUplink(String rawData, int fPort){
+    private String intArrayToHexString(int[] arr) {
+        StringBuilder builder = new StringBuilder();
+        for (int b : arr) {
+            builder.append(Integer.toHexString(b));
+        }
+        return builder.toString();
+    }
+    private Map<String, String> decodeBasicInfo(String rawData, int fPort){
+        Map<String, String> decodedBasicInfo = new HashMap<>();
+        int[] bytesBasicInfo = hexStringToIntArray(rawData);
+        for (int i=0; i<bytesBasicInfo.length;){
+            int chId = bytesBasicInfo[i++];
+            int chType = bytesBasicInfo[i++];
+            if (chId == Integer.parseInt("ff", 16) && chType == Integer.parseInt("01", 16)){
+                decodedBasicInfo.put("protocol_version", "V" + bytesBasicInfo[i]);
+                i += 1;
+            }
+            else if (chId == Integer.parseInt("ff", 16) && chType == Integer.parseInt("08", 16)){
+                decodedBasicInfo.put("device_sn",  intArrayToHexString(Arrays.copyOfRange(bytesBasicInfo, i, i+6)));
+                i += 6;
+            }
+            else if (chId == Integer.parseInt("ff", 16) && chType == Integer.parseInt("09", 16)){
+                decodedBasicInfo.put("hw_version",  "V"+bytesBasicInfo[i]+"."+Integer.toHexString(bytesBasicInfo[i+1]));
+                i += 2;
+            }
+            else if (chId == Integer.parseInt("ff", 16) && chType == Integer.parseInt("0a", 16)){
+                decodedBasicInfo.put("sw_version",  "V"+bytesBasicInfo[i]+"."+Integer.toHexString(bytesBasicInfo[i+1]));
+                i += 2;
+            }
+            else if (chId == Integer.parseInt("ff", 16) && chType == Integer.parseInt("0f", 16)){
+                int val = bytesBasicInfo[i];
+                decodedBasicInfo.put("device_type",  val == 0 ? "A": val == 1 ? "B": "C");
+                i += 2;
+            }
+            else {
+                break;
+            }
+        }
+        return decodedBasicInfo;
+    }
+    private Map<String, String> decodeSensorData(String rawData, int fPort){
         Map<String, String> decodedData = new HashMap<>();
         int[] bytesRawData = hexStringToIntArray(rawData);
         for (int i=0; i<bytesRawData.length;) {
@@ -76,5 +116,15 @@ public class MsAM100Decoder{
             }
         }
         return decodedData;
+    }
+    public Map<String, String> decodeUplink(String rawData, int fPort){
+        Map<String, String> decodedUplink;
+        if (rawData.toUpperCase().startsWith("FF")){
+            decodedUplink = this.decodeBasicInfo(rawData, 85);
+        }
+        else {
+            decodedUplink = this.decodeSensorData(rawData, 85);
+        }
+        return decodedUplink;
     }
 }
