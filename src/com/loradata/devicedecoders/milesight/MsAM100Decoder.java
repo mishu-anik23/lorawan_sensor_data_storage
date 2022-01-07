@@ -1,3 +1,13 @@
+/**
+ * This program implements the Java version of Milesight AM100 Series LoRaWAN Sensor decoder.
+ * The decoding concept is inherited from Public Milesight sensors decoder repo,
+ * which implements Chirpstack and TTN compatible Javascript decoders. Please see in following link:
+ * https://github.com/Milesight-IoT/SensorDecoders/tree/master/AM100_Series
+ *
+ * @author Anik Mishu (anpaul098@gmail.com)
+ * @version 1.0
+ * @since   2022-01-05
+ */
 package com.loradata.devicedecoders.milesight;
 
 import java.util.Arrays;
@@ -14,6 +24,13 @@ public class MsAM100Decoder{
         return value > 0x7fff ? value - 0x10000 : value;
     }
     private static int[] hexStringToIntArray(String s) {
+        /*
+        Converts a given Hex String to corresponding Integer Array. Thanks to hex str to byte stackoverflow:
+        https://stackoverflow.com/questions/8890174/in-java-how-do-i-convert-a-hex-string-to-a-byte
+
+        @param      String  s   Any given Hex String.
+        @return     int [] data Integer Array of given string.     .
+         */
         int len = s.length();
         int[] data = new int[len / 2];
         for (int i = 0; i < len; i += 2) {
@@ -30,6 +47,22 @@ public class MsAM100Decoder{
         return builder.toString();
     }
     private Map<String, String> decodeBasicInfo(String rawData, int fPort){
+        /*
+        Decode basic sensor info from raw Hex string during everytime join in LNS.
+
+        --------------------- Payload Definition ---------------------
+            ff0112ff086128a5294269ff090140ff0a0142ff0f00ff18007b
+
+                            [channel_id] [channel_type] [Channel_value]
+        protocol_version    -> 0xff         0x01        [1byte]     12
+        device_sn           -> 0xff         0x08        [6bytes]    6128a5294269
+        hw_version          -> 0xff         0x09        [2bytes]    01 40 => V1.4
+        sw_version          -> 0xff         0x0a        [2bytes]    01 42 => V1.42
+        device_type         -> 0xff         0x0f        [1byte]     00: Class A, 01: Class B, 02: Class C
+
+        @param      String  rawData     Hex String sent by sensor as Uplink
+        @return     Map<String, String> decoded basic info a/c to chart.
+         */
         Map<String, String> decodedBasicInfo = new HashMap<>();
         int[] bytesBasicInfo = hexStringToIntArray(rawData);
         for (int i=0; i<bytesBasicInfo.length;){
@@ -63,6 +96,28 @@ public class MsAM100Decoder{
         return decodedBasicInfo;
     }
     private Map<String, String> decodeSensorData(String rawData, int fPort){
+        /*
+        Decode regular uplink sensor measurement from raw Hex String.
+
+        --------------------- Payload Definition ---------------------
+        01755C03673401046865056A490006651C0079001400077DE704087D070009733F27
+
+                           [channel_id] [channel_type] [channel_value]
+        battery      -> 0x01         0x75          [1byte ] Unit: %
+        temperature  -> 0x03         0x67          [2bytes] Unit: °C (℉)
+        humidity     -> 0x04         0x68          [1byte ] Unit: %RH
+        activity     -> 0x05         0x6A          [2bytes] Unit:
+        illumination -> 0x06         0x65          [6bytes] Unit: lux
+        ------------------------------------------ AM104
+
+        CO2          -> 0x07         0x7D          [2bytes] Unit: ppm
+        tVOC         -> 0x08         0x7D          [2bytes] Unit: ppb
+        pressure     -> 0x09         0x73          [2bytes] Unit: hPa
+        ------------------------------------------ AM107
+
+        @param      String  rawData     Hex String sent by sensor as Uplink
+        @return     Map<String, String> decoded regular sensor measurement data a/c to chart.
+         */
         Map<String, String> decodedData = new HashMap<>();
         int[] bytesRawData = hexStringToIntArray(rawData);
         for (int i=0; i<bytesRawData.length;) {
@@ -118,6 +173,13 @@ public class MsAM100Decoder{
         return decodedData;
     }
     public Map<String, String> decodeUplink(String rawData, int fPort){
+        /*
+        Decode Uplink message both for basic info and regular measurement data.
+        Currently, function call distinguishion is based on checking the first byte of uplink message.
+
+        @param      String  rawData     Hex String sent by sensor as Uplink
+        @return     Map<String, String> decoded uplink message based on function call.
+         */
         Map<String, String> decodedUplink;
         if (rawData.toUpperCase().startsWith("FF")){
             decodedUplink = this.decodeBasicInfo(rawData, 85);
